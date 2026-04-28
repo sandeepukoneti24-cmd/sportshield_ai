@@ -2,75 +2,129 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SportShield AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SportShield AI | Media Intelligence</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        .hidden { display: none; }
-        body { font-family: 'Inter', sans-serif; background: #F8FAFC; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-    <!-- Login View -->
-    <div id="login-view" class="min-h-screen flex items-center justify-center">
-        <div class="bg-white p-10 rounded-3xl shadow-xl w-full max-w-md border border-gray-100">
-            <div class="text-center mb-8">
-                <div class="bg-blue-600 w-12 h-12 rounded-xl flex items-center justify-center text-white mx-auto mb-4">
-                    <i data-lucide="shield-check"></i>
-                </div>
-                <h1 class="text-2xl font-bold">SportShield AI</h1>
-                <p class="text-gray-500">Sign in to access dashboard</p>
+<body class="bg-[#f8e5e5] text-[#000000]">
+
+    <nav class="border-b border-[#c39ea0]/30 px-8 py-4 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-[#fa255e] rounded-lg flex items-center justify-center text-white shadow-lg">
+                <i data-lucide="shield"></i>
             </div>
-            <input type="text" id="username" placeholder="Username" class="w-full p-4 mb-4 border rounded-xl outline-none focus:ring-2 ring-blue-500">
-            <input type="password" id="password" placeholder="Password" class="w-full p-4 mb-6 border rounded-xl outline-none focus:ring-2 ring-blue-500">
-            <button onclick="handleLogin()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition">Enter Platform</button>
+            <span class="text-xl font-black tracking-tighter">SPORT<span class="text-[#fa255e]">SHIELD</span></span>
         </div>
-    </div>
+        <div class="text-xs font-bold text-[#c39ea0] uppercase tracking-widest">Enterprise AI Security</div>
+    </nav>
 
-    <!-- Dashboard View -->
-    <div id="dashboard-view" class="hidden">
-        <nav class="bg-white border-b px-10 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-2 font-bold text-xl">
-                <i data-lucide="shield-check" class="text-blue-600"></i> SportShield
-            </div>
-            <div class="flex gap-4">
-                <button onclick="loadHistory()" class="text-gray-600 font-medium">History</button>
-                <a href="/logout" class="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-bold">Logout</a>
-            </div>
-        </nav>
-
-        <main class="max-w-5xl mx-auto p-10">
-            <!-- Upload Area -->
-            <div id="drop-zone" class="bg-white border-2 border-dashed border-gray-200 rounded-3xl p-12 text-center cursor-pointer hover:border-blue-400 mb-10">
-                <input type="file" id="file-input" class="hidden" onchange="handleUpload(this.files[0])">
-                <i data-lucide="upload-cloud" class="mx-auto w-12 h-12 text-blue-600 mb-4"></i>
-                <h2 class="text-xl font-bold">Upload Media</h2>
-                <button class="mt-4 bg-gray-900 text-white px-6 py-2 rounded-lg">Browse Files</button>
-            </div>
-
-            <!-- Analysis Results -->
-            <div id="results" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                <div class="bg-white p-6 rounded-2xl border">
-                    <h3 class="font-bold mb-4">Match Analysis</h3>
-                    <div id="similarity-circle" class="text-3xl font-bold text-blue-600">0%</div>
-                    <p id="ai-insight" class="mt-4 text-sm text-gray-600 italic bg-gray-50 p-4 rounded-lg border-l-4 border-blue-500"></p>
+    <main class="max-w-6xl mx-auto p-6 space-y-10">
+        
+        <!-- Hero Upload -->
+        <section class="flex flex-col items-center justify-center py-12">
+            <div id="drop-zone" class="w-full max-w-2xl bg-white border-2 border-dashed border-[#c39ea0] rounded-[24px] p-12 text-center transition-all hover:border-[#fa255e] hover:shadow-[0_0_30px_rgba(250,37,94,0.1)] group cursor-pointer relative overflow-hidden">
+                <input type="file" id="file-input" class="hidden" accept="image/*">
+                <div class="space-y-4">
+                    <div class="bg-[#f8e5e5] w-16 h-16 rounded-full flex items-center justify-center mx-auto text-[#fa255e] group-hover:scale-110 transition-transform">
+                        <i data-lucide="upload-cloud" class="w-8 h-8"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold">Ingest Media Asset</h2>
+                    <p class="text-[#c39ea0] font-medium">Drag and drop sports media to analyze usage</p>
+                    <button class="bg-[#000000] text-white px-8 py-3 rounded-full font-bold hover:bg-[#fa255e] transition-colors shadow-lg">Choose File</button>
                 </div>
-                <div class="bg-white p-6 rounded-2xl border">
-                    <h3 class="font-bold mb-2">Digital Cert</h3>
-                    <p class="text-xs text-gray-400">ID: <span id="res-id" class="text-black font-mono"></span></p>
-                    <p class="text-xs text-gray-400">Hash: <span id="res-hash" class="text-black font-mono"></span></p>
+                <div id="upload-progress" class="hidden absolute bottom-0 left-0 h-1 bg-[#fa255e] transition-all" style="width: 0%"></div>
+            </div>
+        </section>
+
+        <!-- Stats Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-[16px] shadow-sm border border-[#c39ea0]/20">
+                <p class="text-xs font-black text-[#c39ea0] uppercase">Analysis Time</p>
+                <h3 id="stat-perf" class="text-2xl font-bold">0.000s</h3>
+            </div>
+            <div class="bg-white p-6 rounded-[16px] shadow-sm border border-[#c39ea0]/20">
+                <p class="text-xs font-black text-[#c39ea0] uppercase">Risk Assessment</p>
+                <h3 id="stat-risk" class="text-2xl font-bold">Waiting...</h3>
+            </div>
+            <div class="bg-white p-6 rounded-[16px] shadow-sm border border-[#c39ea0]/20">
+                <p class="text-xs font-black text-[#c39ea0] uppercase">Similarity Confidence</p>
+                <h3 id="stat-sim" class="text-2xl font-bold">0.0%</h3>
+            </div>
+        </div>
+
+        <!-- Results Section (Hidden) -->
+        <section id="results-panel" class="hidden space-y-8 animate-in">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Comparison Card -->
+                <div class="bg-white rounded-[20px] p-8 shadow-sm border border-[#c39ea0]/20">
+                    <h3 class="font-bold text-lg mb-6 flex items-center gap-2"><i data-lucide="layers" class="text-[#fa255e]"></i> Visual Comparison</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <span class="text-[10px] font-bold text-[#c39ea0] uppercase">Uploaded Asset</span>
+                            <img id="res-img" src="" class="rounded-lg border border-[#f8e5e5] w-full h-48 object-cover">
+                        </div>
+                        <div class="space-y-2">
+                            <span class="text-[10px] font-bold text-[#c39ea0] uppercase">Reference Match</span>
+                            <div class="relative">
+                                <img src="https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=400" class="rounded-lg border border-[#f8e5e5] w-full h-48 object-cover grayscale opacity-50">
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <span id="res-match-score" class="bg-[#fa255e] text-white text-xs font-bold px-3 py-1 rounded-full"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Insight Card -->
+                <div class="bg-[#000000] text-white rounded-[20px] p-8 shadow-xl">
+                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 text-[#fa255e]"><i data-lucide="sparkles"></i> AI Insight</h3>
+                    <p id="res-ai" class="text-sm leading-relaxed text-gray-300">Generating intelligence...</p>
+                    <div class="mt-8 pt-6 border-t border-white/10 flex justify-between items-center">
+                        <div>
+                            <p class="text-[10px] text-gray-500 uppercase font-bold">Ownership Token</p>
+                            <p id="res-id" class="font-mono text-xs text-[#fa255e]"></p>
+                        </div>
+                        <button class="bg-[#fa255e] p-2 rounded-lg text-white"><i data-lucide="download" class="w-4 h-4"></i></button>
+                    </div>
                 </div>
             </div>
 
-            <!-- History Section -->
-            <div id="history-panel" class="hidden bg-white p-6 rounded-2xl border">
-                <h3 class="font-bold mb-4">Recent Scans</h3>
-                <div id="history-list" class="space-y-3"></div>
+            <!-- Matches and Propagation -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white rounded-[16px] p-6 border border-[#c39ea0]/20">
+                    <h3 class="font-bold mb-4">Detected Matches</h3>
+                    <div id="match-list" class="space-y-4"></div>
+                </div>
+                <div class="bg-white rounded-[16px] p-6 border border-[#c39ea0]/20">
+                    <h3 class="font-bold mb-4">Propagation Flow</h3>
+                    <div class="space-y-4 relative">
+                        <div class="flex items-center gap-4 text-sm font-bold">
+                            <div class="w-2 h-2 bg-[#fa255e] rounded-full"></div> <span>Original Source</span>
+                        </div>
+                        <div class="h-8 w-0.5 bg-gray-100 ml-0.75"></div>
+                        <div class="flex items-center gap-4 text-sm text-gray-400">
+                            <div class="w-2 h-2 bg-gray-200 rounded-full"></div> <span>Fan Aggregate</span>
+                        </div>
+                        <div class="h-8 w-0.5 bg-gray-100 ml-0.75"></div>
+                        <div class="flex items-center gap-4 text-sm text-gray-400">
+                            <div class="w-2 h-2 bg-gray-200 rounded-full"></div> <span>News Network</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </main>
-    </div>
+        </section>
 
-    <script src="/static/js/main.js"></script>
+        <!-- History -->
+        <section class="space-y-4">
+            <h3 class="font-bold text-xl px-2">Scan History</h3>
+            <div id="history-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </section>
+
+    </main>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>lucide.createIcons();</script>
 </body>
 </html>

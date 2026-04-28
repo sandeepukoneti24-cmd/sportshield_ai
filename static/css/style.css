@@ -1,35 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
 
 body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Space Grotesk', sans-serif;
 }
 
-.animate-fade-in {
-    animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.animate-in {
+    animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(30px); }
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes propagate {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(300%); }
-}
-
-.animate-propagation {
-    width: 30%;
-    animation: propagate 3s infinite ease-in-out;
-}
-
-.stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+#drop-zone {
     transition: all 0.3s ease;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+#drop-zone:hover {
+    transform: scale(1.01);
+}
+
+.risk-high { color: #fa255e; }
+.risk-med { color: #f59e0b; }
+.risk-low { color: #10b981; }
+
+.history-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.history-card:hover {
+    transform: translateY(-5px);
+    background: white;
+    border-color: #fa255e;
+}

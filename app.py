@@ -2,131 +2,173 @@ import os
 import time
 import uuid
 import io
-import functools
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from PIL import Image, ImageStat
+import numpy as np
+from flask import Flask, render_template, request, jsonify
+from PIL import Image, ImageStat, ImageOps
 import imagehash
-
-# AI Integration
-try:
-    import google.generativeai as genai
-    HAS_GEMINI = True
-except ImportError:
-    HAS_GEMINI = False
+import google.generativeai as genai
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "sportshield_super_secret_123")
 
 # --- CONFIGURATION ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", None)
-SAFE_SYSTEM_PROMPT = """
-You are a SportShield AI assistant. You ONLY analyze image similarity and media misuse.
-Reject unrelated queries. Respond concisely. No hacking/coding talk.
-"""
+UPLOAD_FOLDER = 'static/uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB limit
 
-if HAS_GEMINI and GEMINI_API_KEY:
+# Gemini AI Setup
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     ai_model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     ai_model = None
 
-# In-Memory Storage (Resets on restart)
+# In-Memory History
 scan_history = []
 
-# --- SECURITY UTILS ---
+# Mock Reference Database (Simulating known original media)
+REFERENCE_DB = [
+    {"id": "REF_001", "name": "Champions League Final 2024", "hash": "8c3c3c3c3c3c3c3c", "source": "UEFA Official"},
+    {"id": "REF_002", "name": "NBA Finals - Game 7", "hash": "f0f0f0f0f0f0f0f0", "source": "NBA Media Hub"},
+    {"id": "REF_003", "name": "Premier League Opener", "hash": "a1b2c3d4e5f6a1b2", "source": "Sky Sports"}
+]
 
-def login_required(f):
-    @functools.wraps(f)
-    def decorated_function(*args, **kwargs):
-        if "user" not in session:
-            return jsonify({"error": "Unauthorized. Please login."}), 401
-        return f(*args, **kwargs)
-    return decorated_function
+# --- CORE LOGIC ---
 
-def get_ai_insight(similarity, mods, asset_id):
-    """Secure AI integration with strict fallback and output filtering."""
+def analyze_modifications(img):
+    """Detects brightness and cropping changes."""
+    stat = ImageStat.Stat(img)
+    brightness = sum(stat.mean) / 3
+    w, h = img.size
+    aspect_ratio = w / h
+    
+    mods = []
+    if brightness > 190: mods.append("Brightness High")
+    elif brightness < 60: mods.append("Brightness Low")
+    
+    # Check for deviation from standard 16:9
+    if abs(aspect_ratio - (16/9)) > 0.3:
+        mods.append("Custom Cropping")
+    
+    return mods if mods else ["None Detected"]
+
+def get_similarity_data(user_hash_obj):
+    """Calculates real Hamming distance similarity."""
+    top_match = {"sim": 0, "name": "Unknown", "source": "N/A"}
+    
+    for ref in REFERENCE_DB:
+        ref_hash = imagehash.hex_to_hash(ref['hash'])
+        distance = user_hash_obj - ref_hash
+        similarity = max(0, (1 - (distance / 64.0)) * 100)
+        
+        if similarity > top_match['sim']:
+            top_match = {
+                "sim": round(similarity, 2),
+                "name": ref['name'],
+                "source": ref['source']
+            }
+    return top_match
+
+def get_safe_ai_insight(sim, mods, asset_id):
+    """Secure AI integration with fallback."""
+    fallback = f"Asset {asset_id} shows {sim}% similarity. Modifications: {', '.join(mods)}. Recommended: Flag for manual copyright review."
+    
     if not ai_model:
-        return f"Asset {asset_id}: {similarity}% match with {mods[0]}. High probability of infringement. Action: Review for Takedown."
+        return fallback
 
     try:
-        # Strict prompt construction - No user input allowed here
-        structured_prompt = f"{SAFE_SYSTEM_PROMPT}\nAnalyze: Similarity {similarity}%, Modifications: {mods}. Recommendation?"
+        # Failsafe Prompt
+        prompt = (
+            f"You are a SportShield AI assistant. Analyze this data strictly:\n"
+            f"Similarity: {sim}%\nModifications: {mods}\nAsset ID: {asset_id}\n"
+            f"Rules: Only discuss media misuse. Block hack/exploit/bypass queries. "
+            f"Provide a short 2-sentence explanation and one action."
+        )
         
-        response = ai_model.generate_content(structured_prompt)
+        response = ai_model.generate_content(prompt)
         text = response.text.strip()
-
-        # Output Filter
-        blocked_words = ["hack", "exploit", "bypass", "attack", "script"]
-        if any(word in text.lower() for word in blocked_words):
-            return "AI content flagged. Manual review required."
         
-        return text[:250] # Limit length
+        # Output Filter
+        blocked = ["hack", "exploit", "bypass", "attack"]
+        if any(b in text.lower() for b in blocked):
+            return "Analysis complete. High-risk tampering detected. Manual review required."
+            
+        return text
     except:
-        return "AI analysis unavailable. Standard protocol: Flag for manual review."
+        return fallback
 
-# --- AUTH ROUTES ---
-
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.json
-    if data.get("username") == "admin" and data.get("password") == "admin123":
-        session["user"] = "admin"
-        return jsonify({"success": True})
-    return jsonify({"error": "Invalid credentials"}), 401
-
-@app.route('/logout')
-def logout():
-    session.pop("user", None)
-    return redirect(url_for('index'))
-
-# --- CORE ROUTES ---
+# --- ROUTES ---
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/analyze', methods=['POST'])
-@login_required
 def analyze():
-    start_time = time.perf_counter()
+    start_perf = time.perf_counter()
+    
     if 'file' not in request.files:
-        return jsonify({"error": "No file"}), 400
+        return jsonify({"error": "No file uploaded"}), 400
     
     file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Invalid file name"}), 400
+
     try:
-        img = Image.open(io.BytesIO(file.read())).convert('RGB')
-        current_hash = imagehash.phash(img)
+        # Save File
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{uuid.uuid4().hex}.{ext}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
         
-        # Simulated Similarity Logic
-        similarity = 92.4 # Demo value
-        mods = ["Cropping Detected"] if img.width != img.height else ["Original Aspect"]
+        # Process Image
+        img = Image.open(filepath).convert('RGB')
+        u_hash = imagehash.phash(img)
         
+        # Core Calculations
+        match = get_similarity_data(u_hash)
+        mods = analyze_modifications(img)
+        
+        # Risk Scoring
+        sim = match['sim']
+        if sim > 85: risk_lvl, risk_score = "HIGH", 92
+        elif sim > 60: risk_lvl, risk_score = "MEDIUM", 65
+        else: risk_lvl, risk_score = "LOW", 24
+
         asset_id = f"SS-{uuid.uuid4().hex[:8].upper()}"
-        insight = get_ai_insight(similarity, mods, asset_id)
+        ai_insight = get_safe_ai_insight(sim, mods, asset_id)
         
         result = {
             "asset_id": asset_id,
-            "hash": str(current_hash),
-            "similarity": similarity,
-            "risk_level": "HIGH" if similarity > 80 else "LOW",
+            "hash": str(u_hash),
+            "similarity": sim,
+            "risk_level": risk_lvl,
+            "risk_score": risk_score,
             "modifications": mods,
-            "ai_insight": insight,
-            "performance": f"{round(time.perf_counter() - start_time, 3)}s",
-            "timestamp": time.strftime("%H:%M:%S")
+            "ai_insight": ai_insight,
+            "match_name": match['name'],
+            "match_source": match['source'],
+            "image_url": f"/static/uploads/{filename}",
+            "performance": f"{round(time.perf_counter() - start_perf, 3)}s",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "geo": "London, UK (Estimated)",
+            "matches": [
+                {"source": "Instagram Fan Page", "sim": sim, "type": mods[0]},
+                {"source": "Sports News Blog", "sim": round(sim*0.8, 1), "type": "Compressed"},
+                {"source": "Twitter/X Feed", "sim": round(sim*0.6, 1), "type": "Resized"}
+            ]
         }
         
-        # Save to History
         scan_history.append(result)
-        if len(scan_history) > 10: scan_history.pop(0) # Keep last 10
-        
         return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
-@app.route('/history', methods=['GET'])
-@login_required
+    except Exception as e:
+        return jsonify({"error": f"Internal Error: {str(e)}"}), 500
+
+@app.route('/history')
 def get_history():
-    return jsonify(scan_history[::-1]) # Return newest first
+    return jsonify(scan_history[::-1])
 
 if __name__ == '__main__':
     app.run(debug=True)
