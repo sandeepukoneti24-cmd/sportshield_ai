@@ -1,109 +1,54 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const dropZone = document.getElementById('drop-zone');
-    const fileInput = document.getElementById('file-input');
+async function handleLogin() {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
 
-    dropZone.onclick = () => fileInput.click();
-
-    fileInput.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Show UI Loading State
-        const originalContent = dropZone.innerHTML;
-        dropZone.innerHTML = `
-            <div class="flex flex-col items-center justify-center">
-                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p class="font-bold text-gray-900">Generating Digital Fingerprint...</p>
-            </div>`;
-
-        // Preview
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            document.getElementById('preview-img').src = event.target.result;
-            document.getElementById('match-img').src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-
-        // API Call
-        const formData = new FormData();
-        formData.append('file', file);
-
-        try {
-            const response = await fetch('/analyze', { method: 'POST', body: formData });
-            const data = await response.json();
-
-            // Populate Results
-            document.getElementById('results-area').classList.remove('hidden');
-            document.getElementById('res-id').innerText = data.asset_id;
-            document.getElementById('res-hash').innerText = data.hash;
-            document.getElementById('res-perf').innerText = data.performance;
-            document.getElementById('similarity-score').innerText = `${data.similarity}% Match`;
-            document.getElementById('ai-insight').innerText = data.ai_insight;
-
-            // Risk Level UI
-            const pill = document.getElementById('risk-pill');
-            const alert = document.getElementById('live-alert');
-            pill.innerText = `${data.risk_level} Risk`;
-            
-            if (data.risk_level === 'HIGH') {
-                pill.className = "px-4 py-1 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-600";
-                alert.classList.remove('hidden');
-            } else {
-                pill.className = "px-4 py-1 rounded-full text-[10px] font-black uppercase bg-green-100 text-green-600";
-                alert.classList.add('hidden');
-            }
-
-            // Tags
-            const tags = document.getElementById('mod-tags');
-            tags.innerHTML = '';
-            data.modifications.forEach(m => {
-                tags.innerHTML += `<span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tighter">${m}</span>`;
-            });
-
-            // Initialize Charts
-            initCharts();
-
-            // Smooth Scroll
-            window.scrollTo({ top: 700, behavior: 'smooth' });
-
-        } catch (err) {
-            alert("Scan failed. Ensure backend is running.");
-            console.error(err);
-        } finally {
-            dropZone.innerHTML = originalContent;
-        }
-    };
-});
-
-function initCharts() {
-    const ctx1 = document.getElementById('trendsChart').getContext('2d');
-    new Chart(ctx1, {
-        type: 'line',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-            datasets: [{
-                label: 'Violations',
-                data: [12, 19, 3, 5, 2, 3, 20],
-                borderColor: '#2563EB',
-                tension: 0.4,
-                fill: true,
-                backgroundColor: 'rgba(37, 99, 235, 0.05)'
-            }]
-        },
-        options: { plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { grid: { display: false } } } }
+    const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass })
     });
 
-    const ctx2 = document.getElementById('sourceChart').getContext('2d');
-    new Chart(ctx2, {
-        type: 'doughnut',
-        data: {
-            labels: ['Fan Pages', 'News', 'Blogs'],
-            datasets: [{
-                data: [65, 20, 15],
-                backgroundColor: ['#2563EB', '#60A5FA', '#E2E8F0'],
-                borderWidth: 0
-            }]
-        },
-        options: { plugins: { legend: { position: 'bottom' } }, cutout: '70%' }
-    });
+    if (res.ok) {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('dashboard-view').classList.remove('hidden');
+    } else {
+        alert("Login Failed: Use admin / admin123");
+    }
+}
+
+async function handleUpload(file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch('/analyze', { method: 'POST', body: formData });
+    if (res.status === 401) return alert("Session expired. Please login.");
+    
+    const data = await res.json();
+    
+    // Display results
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('similarity-circle').innerText = data.similarity + "% Match";
+    document.getElementById('ai-insight').innerText = data.ai_insight;
+    document.getElementById('res-id').innerText = data.asset_id;
+    document.getElementById('res-hash').innerText = data.hash;
+}
+
+async function loadHistory() {
+    const res = await fetch('/history');
+    const data = await res.json();
+    const list = document.getElementById('history-list');
+    
+    document.getElementById('history-panel').classList.remove('hidden');
+    list.innerHTML = data.map(item => `
+        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+            <div>
+                <p class="font-bold text-sm">${item.asset_id}</p>
+                <p class="text-[10px] text-gray-400">${item.timestamp}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm font-bold ${item.risk_level === 'HIGH' ? 'text-red-600' : 'text-green-600'}">${item.similarity}%</p>
+            </div>
+        </div>
+    `).join('');
 }
