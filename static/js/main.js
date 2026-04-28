@@ -29,10 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleFiles(file) {
         if (!file) return;
 
-        // Visual Feedback
-        document.getElementById('upload-progress').classList.remove('hidden');
-        document.getElementById('upload-progress').style.width = '50%';
-        
+        const progressBar = document.getElementById('upload-progress');
+        progressBar.classList.remove('hidden');
+        progressBar.style.width = '40%';
+
         const formData = new FormData();
         formData.append('file', file);
 
@@ -41,48 +41,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: formData
             });
-            
+
             const data = await response.json();
-            
-            if (data.error) {
-                alert(data.error);
+            console.log("API RESPONSE:", data); // DEBUG
+
+            if (!data.success) {
+                alert(data.error || "Something went wrong");
                 return;
             }
 
-            // Update UI
+            // Show results panel
             resultsPanel.classList.remove('hidden');
-            document.getElementById('res-img').src = data.image_url;
-            document.getElementById('stat-perf').innerText = data.performance;
-            document.getElementById('stat-risk').innerText = data.risk_level;
-            document.getElementById('stat-risk').className = `text-2xl font-bold ${getRiskClass(data.risk_level)}`;
-            document.getElementById('stat-sim').innerText = data.similarity + '%';
-            document.getElementById('res-match-score').innerText = data.similarity + '% Match';
-            document.getElementById('res-ai').innerText = data.ai_insight;
-            document.getElementById('res-id').innerText = data.asset_id;
 
-            // Populate Matches
+            // Update main stats
+            document.getElementById('res-img').src = data.image_url || '';
+            document.getElementById('stat-perf').innerText = data.performance || '-';
+            document.getElementById('stat-risk').innerText = data.risk_level || '-';
+            document.getElementById('stat-risk').className =
+                `text-2xl font-bold ${getRiskClass(data.risk_level)}`;
+
+            document.getElementById('stat-sim').innerText =
+                (data.similarity || 0) + '%';
+
+            document.getElementById('res-match-score').innerText =
+                (data.similarity || 0) + '% Match';
+
+            document.getElementById('res-ai').innerText =
+                data.ai_insight || "No AI insight available";
+
+            document.getElementById('res-id').innerText =
+                data.asset_id || '-';
+
+            // 🏆 SAFE MATCHES RENDER
             const matchList = document.getElementById('match-list');
-            matchList.innerHTML = data.matches.map(m => `
-                <div class="flex justify-between items-center p-4 bg-[#f8e5e5] rounded-xl">
-                    <div>
-                        <p class="font-bold text-sm">${m.source}</p>
-                        <p class="text-[10px] text-[#c39ea0] font-bold uppercase">${m.type}</p>
-                    </div>
-                    <span class="font-mono font-bold text-[#fa255e]">${m.sim}%</span>
-                </div>
-            `).join('');
 
-            // Reset progress
-            document.getElementById('upload-progress').style.width = '100%';
+            if (matchList) {
+                const safeMatches = data.matches || [];
+
+                if (safeMatches.length > 0) {
+                    matchList.innerHTML = safeMatches.map(m => `
+                        <div class="flex justify-between items-center p-4 bg-[#f8e5e5] rounded-xl">
+                            <div>
+                                <p class="font-bold text-sm">${m.source || 'Unknown Source'}</p>
+                                <p class="text-[10px] text-[#c39ea0] font-bold uppercase">${m.type || 'Standard'}</p>
+                            </div>
+                            <span class="font-mono font-bold text-[#fa255e]">${m.sim || 0}%</span>
+                        </div>
+                    `).join('');
+                } else {
+                    matchList.innerHTML = `
+                        <p class="text-sm text-gray-400 p-4">
+                            No secondary matches found.
+                        </p>
+                    `;
+                }
+            }
+
+            // Progress complete
+            progressBar.style.width = '100%';
+
             setTimeout(() => {
-                document.getElementById('upload-progress').classList.add('hidden');
-                document.getElementById('upload-progress').style.width = '0%';
-            }, 1000);
+                progressBar.classList.add('hidden');
+                progressBar.style.width = '0%';
+            }, 800);
 
-            // Refresh History
+            // Refresh history
             fetchHistory();
-            
-            // Scroll to results
+
+            // Scroll
             resultsPanel.scrollIntoView({ behavior: 'smooth' });
 
         } catch (err) {
@@ -92,30 +118,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchHistory() {
-        const res = await fetch('/history');
-        const data = await res.json();
-        const container = document.getElementById('history-container');
-        
-        container.innerHTML = data.map(item => `
-            <div class="history-card bg-white/50 p-4 rounded-xl border border-[#c39ea0]/20 flex items-center gap-4">
-                <img src="${item.image_url}" class="w-12 h-12 rounded object-cover">
-                <div class="flex-1">
-                    <p class="text-[10px] font-bold text-[#c39ea0]">${item.timestamp}</p>
-                    <p class="text-sm font-bold">${item.asset_id}</p>
+        try {
+            const res = await fetch('/history');
+            const data = await res.json();
+
+            const container = document.getElementById('history-container');
+
+            if (!container) return;
+
+            const safeHistory = data || [];
+
+            if (safeHistory.length === 0) {
+                container.innerHTML = `
+                    <p class="text-sm text-gray-400">
+                        No history yet.
+                    </p>
+                `;
+                return;
+            }
+
+            container.innerHTML = safeHistory.map(item => `
+                <div class="bg-white/50 p-4 rounded-xl border border-[#c39ea0]/20 flex items-center gap-4">
+                    <img src="${item.image_url || ''}" class="w-12 h-12 rounded object-cover">
+                    <div class="flex-1">
+                        <p class="text-[10px] font-bold text-[#c39ea0]">
+                            ${item.timestamp || ''}
+                        </p>
+                        <p class="text-sm font-bold">
+                            ${item.asset_id || ''}
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold ${getRiskClass(item.risk_level)}">
+                            ${item.similarity || 0}%
+                        </p>
+                    </div>
                 </div>
-                <div class="text-right">
-                    <p class="text-xs font-bold ${getRiskClass(item.risk_level)}">${item.similarity}%</p>
-                </div>
-            </div>
-        `).join('');
+            `).join('');
+
+        } catch (err) {
+            console.error("History load failed", err);
+        }
     }
 
-    function getRiskClass(lvl) {
-        if (lvl === 'HIGH') return 'risk-high';
-        if (lvl === 'MEDIUM') return 'risk-med';
-        return 'risk-low';
+    function getRiskClass(level) {
+        if (level === 'HIGH') return 'text-[#fa255e]';
+        if (level === 'MEDIUM') return 'text-[#c39ea0]';
+        return 'text-green-500';
     }
 
-    // Initial Load
+    // Initial load
     fetchHistory();
 });
